@@ -11,7 +11,7 @@ const viewport = useViewportStore()
 </script>
 
 <template>
-	<Tq.TitleBar name="Ichimatsu Animation" icon="favicon.svg">
+	<Tq.TitleBar name="Ichimatsu Animation" icon="icon.png">
 		<template #center>
 			<Tq.InputGroup>
 				<Tq.InputCheckbox

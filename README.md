@@ -1,6 +1,6 @@
 # 市松パターンジェネレーター
 
-![Ichimatsu Pattern Demo](./public/icon.png?v=20250614)
+![Ichimatsu Pattern Demo](./public/icon.png)
 
 ## 概要
 
@@ -41,6 +41,18 @@ This project was created with reference to the following projects by **Baku Hash
 - **[UNIM](https://baku89.com/works/unim)** - Unicode character animation tool. This project is based on UNIM's codebase, forked and adapted specifically for rhombic tiling pattern generation
 
 We extend our deepest gratitude to Baku Hashimoto for his excellent open-source tools and project design philosophy.
+
+## パターン生成アルゴリズム
+
+このプロジェクトの菱形タイリングパターン生成アルゴリズムは、**松川昌平**氏による論文「[コンピュータによる菱形タイリングの生成手法](https://gakkai.sfc.keio.ac.jp/journal/.assets/SFCJ20-1-07.pdf)」（SFC Journal Vol.20 No.1, 2020）に基づいています。
+
+同論文では、12個のゾーンオフセットパラメータを用いた菱形タイリングの体系的な生成手法が提示されており、本プロジェクトではこの手法を実装してインタラクティブなパターン生成を実現しています。
+
+## Pattern Generation Algorithm
+
+The rhombic tiling pattern generation algorithm in this project is based on the paper "[Computer-based Generation Method for Rhombic Tiling](https://gakkai.sfc.keio.ac.jp/journal/.assets/SFCJ20-1-07.pdf)" by **Shohei Matsukawa** (SFC Journal Vol.20 No.1, 2020).
+
+The paper presents a systematic approach to generating rhombic tilings using 12 zone offset parameters, which this project implements to achieve interactive pattern generation.
 
 ## 開発中
 
