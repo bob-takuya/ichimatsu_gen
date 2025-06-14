@@ -1,0 +1,11 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"baseUrl": "./",
+		"paths": {
+			"tweeq": ["../src/index.ts"]
+		}
+	},
+	"include": [".vuepress/**/*"],
+	"exclude": []
+}

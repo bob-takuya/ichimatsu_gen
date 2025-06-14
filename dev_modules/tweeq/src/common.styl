@@ -1,0 +1,182 @@
+font-numeric()
+	font-family var(--tq-font-numeric)
+	font-variant-numeric tabular-nums
+
+pane-style()
+	border 1px solid var(--tq-color-border)
+	background var(--tq-color-surface)
+	backdrop-filter blur(6px)
+
+popup-style()
+	pane-style()
+	padding var(--tq-popup-padding)
+	border-radius var(--tq-radius-popup)
+	box-shadow 0 0 20px 0px var(--tq-color-shadow)
+	color var(--tq-color-text)
+
+button-focus-style()
+	position relative
+
+	&:before
+		content ''
+		position absolute
+		inset -3px
+		border 1px solid var(--tq-color-accent)
+		border-radius calc(var(--tq-radius-input) + 2px)
+
+hover-transition(prop = all)
+	values = ()
+
+	for p in arguments
+		push(
+			values,
+			p + ' var(--tq-hover-transition-duration) cubic-bezier(0.4, 0, 0.2, 1)'
+		)
+
+	transition unquote(join(',', values))
+
+active-transition(prop = all)
+	values = ()
+
+	for p in arguments
+		push(
+			values,
+			p + ' var(--tq-active-transition-duration) cubic-bezier(0.4, 0, 0.2, 1)'
+		)
+
+	transition unquote(join(',', values))
+
+use-input-font()
+	&[font=numeric]
+		font-numeric()
+
+	&[font=monospace]
+		font-family var(--tq-font-code)
+
+use-input-align()
+	&[align=left]
+		text-align left
+
+	&[align=center]
+		text-align center
+
+	&[align=right]
+		text-align right
+
+use-input-position()
+	&[inline-position=middle], &[block-position=middle]
+		border-radius 0
+
+	&[inline-position=start]
+		border-top-right-radius 0
+		border-bottom-right-radius 0
+
+	&[inline-position=end]
+		border-top-left-radius 0
+		border-bottom-left-radius 0
+
+	&[block-position=start]
+		border-bottom-right-radius 0
+		border-bottom-left-radius 0
+
+	&[block-position=end]
+		border-top-left-radius 0
+		border-top-right-radius 0
+
+use-input-theme()
+	&[theme=minimal]
+		background transparent
+
+		&:hover
+			box-shadow 0 0 0 1px var(--tq-color-border)
+
+		&:focus-within
+			box-shadow 0 0 0 1px var(--tq-color-accent)
+
+input-overlay()
+	position fixed
+	inset 0
+	z-index 1000
+	pointer-events none
+
+	svg
+		position absolute
+		inset 0
+		width 100vw
+		height 100vh
+		stroke-linecap round
+		stroke-linejoin round
+
+	.thin, .bold, .extra-bold
+		fill none
+		stroke var(--tq-color-accent)
+
+	.gray
+		stroke var(--tq-color-border)
+
+	.thin
+		stroke-width 1
+
+	.bold
+		stroke-width 2
+
+	.extra-bold
+		stroke-width 4
+
+	.label
+		font-size 1em
+		font-numeric()
+		fill var(--tq-color-accent)
+
+set-alpha(name, opacity)
+	'color-mix(in srgb, var(%s) %d%, transparent)' % (name opacity * 100)
+
+reset-viewport(selector)
+	@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap')
+
+	:root
+		interpolate-size allow-keywords
+
+	@layer tweeq
+		{selector}
+			line-height 1
+			margin 0
+			padding 0
+			border 0
+			vertical-align baseline
+			font inherit
+			font-family var(--tq-font-ui)
+			font-size var(--tq-rem)
+			user-select none
+			color var(--tq-color-text)
+
+			*, *:before, *:after
+				content unset
+				margin 0
+				padding 0
+				border 0
+				vertical-align baseline
+				color inherit
+				font inherit
+				font-size inherit
+				box-sizing border-box
+				font-weight inherit
+				font-style normal
+				text-align inherit
+				list-style none
+				outline none
+				cursor inherit
+				background transparent
+
+			::selection
+				background var(--tq-color-accent)
+				color var(--tq-color-on-accent)
+
+			::-webkit-scrollbar
+				width var(--tq-scrollbar-width)
+				height var(--tq-scrollbar-width)
+				background transparent
+
+			::-webkit-scrollbar-thumb
+				border-radius 9999px
+				background 'color-mix(in srgb, var(--tq-color-text) 20%, transparent)' % ''
