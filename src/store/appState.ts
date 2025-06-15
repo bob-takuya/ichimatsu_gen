@@ -535,6 +535,97 @@ export const useAppStateStore = defineStore('appState', () => {
 		},
 	])
 
+	// Auto-selection and variation recalculation helper
+	function selectFrameAndTriggerVariations(sequenceId: string, frameIndex: number) {
+		// Select the sequence first
+		selectSequence(sequenceId)
+		
+		// Then select the specific frame
+		setCurrentFrame(frameIndex)
+		
+		// Trigger variation recalculation by updating pattern store
+		const pattern = usePatternStore()
+		const sequenceIndex = project.items.findIndex(item => item.id === sequenceId)
+		if (sequenceIndex !== -1) {
+			const item = project.items[sequenceIndex]
+			if (item.type === 'tilingSequence' && item.patterns[frameIndex]) {
+				pattern.updateCurrentOffsets(item.patterns[frameIndex].offsets)
+			}
+		}
+	}
+
+	// Auto-scroll helper (to be used by components)
+	const autoScrollCallbacks = ref<((frameIndex: number) => void)[]>([])
+	
+	function registerAutoScrollCallback(callback: (frameIndex: number) => void) {
+		autoScrollCallbacks.value.push(callback)
+		
+		// Return unregister function
+		return () => {
+			const index = autoScrollCallbacks.value.indexOf(callback)
+			if (index > -1) {
+				autoScrollCallbacks.value.splice(index, 1)
+			}
+		}
+	}
+	
+	function triggerAutoScroll(frameIndex: number) {
+		autoScrollCallbacks.value.forEach(callback => callback(frameIndex))
+	}
+
+	// Enhanced pattern insertion with auto-selection
+	function insertPatternsWithAutoSelect(newPatterns: TilingPattern[]) {
+		if (newPatterns.length === 0) return
+
+		// パターンにパスを生成
+		const patternsWithPaths = newPatterns.map(p => {
+			if (!p.path) {
+				return createTilingPattern(p.offsets, {
+					id: p.id,
+					name: p.name,
+					duration: p.duration,
+				})
+			}
+			return p
+		})
+
+		// 選択されたアイテムに追加、または新しいアイテムを作成
+		if (selections.value.length > 0) {
+			const sel = selections.value[0]
+			if (sel.type === 'item' || sel.type === 'sequencePattern') {
+				const item = project.items[sel.index]
+				if (item.type === 'tilingSequence') {
+					// Add patterns to existing sequence
+					item.patterns.push(...patternsWithPaths)
+					
+					// Auto-select the last added frame
+					const lastFrameIndex = item.patterns.length - 1
+					selectFrameAndTriggerVariations(item.id, lastFrameIndex)
+					triggerAutoScroll(lastFrameIndex)
+					return
+				}
+			}
+		}
+
+		// 新しいアイテムを作成
+		const newItem: Item = {
+			type: 'tilingSequence',
+			id: uniqueId('seq_'),
+			color: '#6565f7',
+			position: [...itemInsertPosition.value],
+			patterns: patternsWithPaths,
+		}
+
+		project.items.push(newItem)
+		
+		// Auto-select the new sequence and its last frame
+		if (patternsWithPaths.length > 0) {
+			const lastFrameIndex = patternsWithPaths.length - 1
+			selectFrameAndTriggerVariations(newItem.id, lastFrameIndex)
+			triggerAutoScroll(lastFrameIndex)
+		}
+	}
+
 	return {
 		selections,
 		itemInsertPosition,
@@ -543,11 +634,15 @@ export const useAppStateStore = defineStore('appState', () => {
 		hoveredPatterns,
 		isPlaying,
 		insertPatterns,
+		insertPatternsWithAutoSelect,
 		offsetSelection,
 		offsetSelectedPatternsDuration,
 		swapSelectedPattern,
 		setIsPlaying,
 		debugMode,
+		selectFrameAndTriggerVariations,
+		registerAutoScrollCallback,
+		triggerAutoScroll,
 		
 		// Computed properties for sequence management
 		get selectedSequenceId() {

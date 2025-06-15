@@ -31,6 +31,8 @@ export interface TilingData {
 	rhombuses: RhombusInfo[]
 	bounds: {min: vec2; max: vec2}
 	lines: Array<{a: number; b: number; c: number; angle_deg: number}>
+	/** ひし形隣接関係の識別用ハッシュ値 */
+	adjacencyHash?: string
 }
 
 /**
@@ -279,6 +281,14 @@ export function generateRhombusTiling(offsets: number[], sideLength: number = 1.
 		}
 	}
 
+	// 隣接関係のハッシュを計算（パターン変化検知用）
+	const adjacencyData = Array.from(rhombusDataMap.entries()).map(([key, data]) => ({
+		key,
+		center: data.center,
+		adjacent: data.adjacent.sort() // ソートして一意性を保つ
+	}))
+	const adjacencyHash = generateAdjacencyHash(adjacencyData)
+
 	return {
 		rhombuses,
 		bounds: {
@@ -291,6 +301,7 @@ export function generateRhombusTiling(offsets: number[], sideLength: number = 1.
 			c: line.c,
 			angle_deg: line.angle_deg,
 		})),
+		adjacencyHash,
 	}
 }
 
@@ -459,4 +470,309 @@ export function createTilingPattern(
 			boundsMax: tiling.bounds.max,
 		},
 	}
+}
+
+/**
+ * 隣接関係データからハッシュ値を生成
+ */
+function generateAdjacencyHash(adjacencyData: Array<{key: string; center: vec2; adjacent: string[]}>): string {
+	const dataString = adjacencyData
+		.sort((a, b) => a.key.localeCompare(b.key))
+		.map(item => `${item.key}:${item.center[0].toFixed(6)},${item.center[1].toFixed(6)}:${item.adjacent.join(',')}`)
+		.join('|')
+	
+	// 簡易ハッシュ関数
+	let hash = 0
+	for (let i = 0; i < dataString.length; i++) {
+		const char = dataString.charCodeAt(i)
+		hash = ((hash << 5) - hash) + char
+		hash = hash & hash // 32bit整数に変換
+	}
+	return hash.toString(36)
+}
+
+/**
+ * 2つのTilingDataの隣接関係が異なるかを判定
+ */
+export function hasAdjacencyChanged(tiling1: TilingData, tiling2: TilingData): boolean {
+	return tiling1.adjacencyHash !== tiling2.adjacencyHash
+}
+
+/**
+ * より詳細なパターン変化の検知
+ */
+function hasDetailedPatternChange(tiling1: TilingData, tiling2: TilingData): boolean {
+	// 1. ひし形の数の変化
+	if (tiling1.rhombuses.length !== tiling2.rhombuses.length) {
+		return true
+	}
+	
+	// 2. 隣接関係の変化
+	if (hasAdjacencyChanged(tiling1, tiling2)) {
+		return true
+	}
+	
+	// 3. ひし形のタイプ分布の変化
+	const getTypeDistribution = (tiling: TilingData) => {
+		const distribution = { thin: 0, thick: 0, other: 0 }
+		tiling.rhombuses.forEach(r => distribution[r.type]++)
+		return distribution
+	}
+	
+	const dist1 = getTypeDistribution(tiling1)
+	const dist2 = getTypeDistribution(tiling2)
+	
+	if (dist1.thin !== dist2.thin || dist1.thick !== dist2.thick || dist1.other !== dist2.other) {
+		return true
+	}
+	
+	// 4. ひし形の重心位置の変化
+	const getCenterOfMass = (tiling: TilingData) => {
+		if (tiling.rhombuses.length === 0) return [0, 0]
+		const sum = tiling.rhombuses.reduce((acc, r) => [acc[0] + r.center[0], acc[1] + r.center[1]], [0, 0])
+		return [sum[0] / tiling.rhombuses.length, sum[1] / tiling.rhombuses.length]
+	}
+	
+	const center1 = getCenterOfMass(tiling1)
+	const center2 = getCenterOfMass(tiling2)
+	const centerDistance = Math.sqrt((center1[0] - center2[0]) ** 2 + (center1[1] - center2[1]) ** 2)
+	
+	if (centerDistance > 0.1) {
+		return true
+	}
+	
+	return false
+}
+
+/**
+ * より効率的なパターン変化検知（計算量を削減）
+ */
+function hasSignificantChange(tiling1: TilingData, tiling2: TilingData): boolean {
+	// 最も軽量な検査から順に実行
+	
+	// 1. ひし形の数の変化（O(1)）
+	if (tiling1.rhombuses.length !== tiling2.rhombuses.length) {
+		return true
+	}
+	
+	// 2. 隣接関係の変化（O(1)）
+	if (tiling1.adjacencyHash !== tiling2.adjacencyHash) {
+		return true
+	}
+	
+	// 3. 境界ボックスの大きさの変化（O(1)）
+	const size1 = (tiling1.bounds.max[0] - tiling1.bounds.min[0]) * (tiling1.bounds.max[1] - tiling1.bounds.min[1])
+	const size2 = (tiling2.bounds.max[0] - tiling2.bounds.min[0]) * (tiling2.bounds.max[1] - tiling2.bounds.min[1])
+	
+	if (Math.abs(size1 - size2) > 0.01) {
+		return true
+	}
+	
+	return false
+}
+
+/**
+ * 最適化されたパターン変化検知
+ */
+export function findOptimalPatternChange(
+	baseOffsets: number[], 
+	lineIndex: number, 
+	direction: number, 
+	options: {
+		stepSize?: number
+		maxSteps?: number
+		minChange?: number
+	} = {}
+): { offsets: number[]; changed: boolean; steps: number } {
+	const { stepSize = 0.1, maxSteps = 100, minChange = 0.01 } = options
+	
+	let baseTiling: TilingData
+	try {
+		baseTiling = generateRhombusTiling(baseOffsets)
+	} catch (e) {
+		// ベースパターンの生成に失敗した場合、小さな変化を返す
+		const testOffsets = [...baseOffsets]
+		testOffsets[lineIndex] = baseOffsets[lineIndex] + (direction * stepSize)
+		return { offsets: testOffsets, changed: true, steps: 1 }
+	}
+	
+	let currentStep = 0
+	let lastValidOffsets = [...baseOffsets]
+	let foundChange = false
+	
+	// 二分探索的アプローチで効率的に変化点を見つける
+	let lowStep = 0
+	let highStep = maxSteps
+	
+	while (lowStep < highStep && currentStep < maxSteps) {
+		currentStep++
+		const midStep = Math.floor((lowStep + highStep) / 2)
+		
+		const testOffsets = [...baseOffsets]
+		const newValue = baseOffsets[lineIndex] + (direction * stepSize * midStep)
+		testOffsets[lineIndex] = newValue
+		
+		// 範囲チェック
+		if (Math.abs(newValue) > 10) {
+			highStep = midStep - 1
+			continue
+		}
+		
+		try {
+			const testTiling = generateRhombusTiling(testOffsets)
+			
+			if (hasSignificantChange(baseTiling, testTiling)) {
+				foundChange = true
+				highStep = midStep
+				lastValidOffsets = [...testOffsets]
+			} else {
+				lowStep = midStep + 1
+			}
+		} catch (e) {
+			// エラーが発生した場合も変化とみなす
+			foundChange = true
+			highStep = midStep
+			lastValidOffsets = [...testOffsets]
+		}
+		
+		// 早期終了条件
+		if (highStep - lowStep <= 1) {
+			break
+		}
+	}
+	
+	// 最小変化量を確保
+	if (!foundChange) {
+		const minChangeStep = Math.max(1, Math.ceil(minChange / stepSize))
+		const testOffsets = [...baseOffsets]
+		const newValue = baseOffsets[lineIndex] + (direction * stepSize * minChangeStep)
+		testOffsets[lineIndex] = Math.max(-10, Math.min(10, newValue))
+		return { offsets: testOffsets, changed: false, steps: minChangeStep }
+	}
+	
+	return { offsets: lastValidOffsets, changed: foundChange, steps: currentStep }
+}
+
+/**
+ * 指定されたオフセットで最初にパターンが変化する点を見つける
+ */
+export function findFirstPatternChange(
+	baseOffsets: number[], 
+	lineIndex: number, 
+	direction: number, 
+	stepSize: number = 0.2, 
+	maxSteps: number = 50
+): { offsets: number[]; changed: boolean } {
+	let baseTiling;
+	try {
+		baseTiling = generateRhombusTiling(baseOffsets)
+	} catch (e) {
+		// ベースパターンの生成に失敗した場合、変化なしとして扱う
+		const testOffsets = [...baseOffsets]
+		testOffsets[lineIndex] = baseOffsets[lineIndex] + (direction * stepSize)
+		return { offsets: testOffsets, changed: false }
+	}
+	
+	for (let step = 1; step <= maxSteps; step++) {
+		const testOffsets = [...baseOffsets]
+		const newValue = baseOffsets[lineIndex] + (direction * stepSize * step)
+		testOffsets[lineIndex] = newValue
+		
+		// 範囲チェック
+		if (Math.abs(newValue) > 10) {
+			// 範囲外の場合、最後の有効な値で変化なしとして返す
+			testOffsets[lineIndex] = direction > 0 ? 10 : -10
+			return { offsets: testOffsets, changed: false }
+		}
+		
+		try {
+			const testTiling = generateRhombusTiling(testOffsets)
+			
+			// 詳細な変化検知を使用
+			if (hasDetailedPatternChange(baseTiling, testTiling)) {
+				return { offsets: testOffsets, changed: true }
+			}
+		} catch (e) {
+			// エラーが発生した場合、前のステップで止める（変化なし）
+			const safeOffsets = [...baseOffsets]
+			const safeValue = baseOffsets[lineIndex] + (direction * stepSize * (step - 1))
+			safeOffsets[lineIndex] = Math.max(-10, Math.min(10, safeValue))
+			return { offsets: safeOffsets, changed: false }
+		}
+	}
+	
+	// 変化が見つからない場合は、変化なしとして現在の値を少し変更した値を返す
+	const testOffsets = [...baseOffsets]
+	const smallChange = direction * stepSize * 2 // 小さな変化
+	testOffsets[lineIndex] = Math.max(-10, Math.min(10, baseOffsets[lineIndex] + smallChange))
+	return { offsets: testOffsets, changed: false }
+}
+
+/**
+ * 高品質な方向別バリエーション生成
+ */
+export function generateDirectionalVariations(
+	baseOffsets: number[], 
+	stepSize: number = 0.1, 
+	maxSteps: number = 100
+): TilingPattern[] {
+	const variations: TilingPattern[] = []
+	
+	console.log('🚀 Starting optimized variation generation...')
+	console.time('Variation Generation')
+	
+	const basePattern = createTilingPattern(baseOffsets, {
+		id: 'base',
+		name: 'Base Pattern',
+	})
+	
+	let successfulVariations = 0
+	let totalChanges = 0
+	
+	for (let lineIndex = 0; lineIndex < 12; lineIndex++) {
+		// 各線について両方向に最適化された変化検知を実行
+		for (const direction of [1, -1] as const) {
+			// より単純で確実なfindFirstPatternChangeを使用
+			const result = findFirstPatternChange(baseOffsets, lineIndex, direction, stepSize, maxSteps)
+			
+			const changeAmount = result.offsets[lineIndex] - baseOffsets[lineIndex]
+			const directionSymbol = direction > 0 ? '+' : ''
+			
+			const pattern = createTilingPattern(result.offsets, {
+				id: `opt_${lineIndex}_${direction > 0 ? 'pos' : 'neg'}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+				name: `L${lineIndex + 1}${directionSymbol}${changeAmount.toFixed(2)}`,
+				duration: 1,
+			})
+			
+			// メタデータに追加情報を含める
+			pattern.meta = {
+				...pattern.meta,
+				lineIndex,
+				direction,
+				changeAmount,
+				foundChange: result.changed, // ここで正しくchangedフラグを設定
+				baseRhombusCount: basePattern.meta.rhombusCount,
+				rhombusCountDiff: (pattern.meta.rhombusCount as number) - (basePattern.meta.rhombusCount as number)
+			}
+			
+			variations.push(pattern)
+			
+			if (result.changed) {
+				successfulVariations++
+				totalChanges += Math.abs(changeAmount)
+			}
+			
+			console.log(`✨ L${lineIndex + 1}${directionSymbol}: Δ${changeAmount.toFixed(3)} (${result.changed ? 'CHANGED' : 'no change'})`)
+		}
+	}
+	
+	console.timeEnd('Variation Generation')
+	console.log(`📊 Summary: ${successfulVariations}/${variations.length} successful variations, avg change: ${successfulVariations > 0 ? (totalChanges / successfulVariations).toFixed(3) : 'N/A'}`)
+	
+	// 品質フィルタリング：変化があるもののみを返す
+	const filteredVariations = variations.filter(v => v.meta.foundChange)
+	
+	console.log(`🎯 Final result: ${filteredVariations.length} variations with actual changes`)
+	
+	return filteredVariations
 }

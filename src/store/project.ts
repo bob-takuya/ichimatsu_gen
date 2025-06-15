@@ -117,24 +117,37 @@ export const useProjectStore = defineStore('project', () => {
 			}
 		},
 		
-		addPatternToSequence(sequenceId: string, pattern: TilingPattern) {
+		addPatternToSequence(sequenceId: string, pattern: TilingPattern, autoSelect = true) {
 			const sequence = project.items.find(
 				(item): item is ItemTilingSequence => 
 					item.type === 'tilingSequence' && item.id === sequenceId
 			)
 			if (sequence) {
 				sequence.patterns.push(pattern)
+				
+				// Auto-select the newly added frame
+				if (autoSelect) {
+					const newFrameIndex = sequence.patterns.length - 1
+					return { sequenceId, frameIndex: newFrameIndex }
+				}
 			}
+			return null
 		},
 		
-		insertPatternToSequence(sequenceId: string, index: number, pattern: TilingPattern) {
+		insertPatternToSequence(sequenceId: string, index: number, pattern: TilingPattern, autoSelect = true) {
 			const sequence = project.items.find(
 				(item): item is ItemTilingSequence => 
 					item.type === 'tilingSequence' && item.id === sequenceId
 			)
 			if (sequence) {
 				sequence.patterns.splice(index, 0, pattern)
+				
+				// Auto-select the newly inserted frame
+				if (autoSelect) {
+					return { sequenceId, frameIndex: index }
+				}
 			}
+			return null
 		},
 		
 		removePatternFromSequence(sequenceId: string, patternIndex: number) {

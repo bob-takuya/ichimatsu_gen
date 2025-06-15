@@ -1,7 +1,7 @@
 import {defineStore} from 'pinia'
 import {computed, ref, watch} from 'vue'
 
-import {TilingPattern, createTilingPattern} from '@/TilingGenerator'
+import {TilingPattern, createTilingPattern, generateRhombusTiling, hasAdjacencyChanged, generateDirectionalVariations} from '@/TilingGenerator'
 
 // アニメーション状態を管理するための参照
 let isAnimationPlaying = false
@@ -60,44 +60,147 @@ export const usePatternStore = defineStore('pattern', () => {
 		},
 	])
 
-	// バリエーション生成
-	function generateVariations(baseOffsets: number[] = currentOffsets.value, count: number = 8) {
+	// ログ機能の状態
+	const isLogging = ref(false)
+	const loggedFrames = ref<TilingPattern[]>([])
+	const lastLoggedTiling = ref<any>(null)
+
+	// バリエーション生成（最適化された方式：方向別変化検知）
+	function generateVariations(baseOffsets: number[] = currentOffsets.value) {
 		// アニメーション再生中は新しいバリエーションを生成しない
 		if (isAnimationPlaying) {
 			return
 		}
 		
-		const newVariations: PatternVariation[] = []
-
-		// 基本パターンをわずかに変化させたバリエーション
-		for (let i = 0; i < count; i++) {
-			const variation = baseOffsets.map(offset => {
-				const noise = (Math.random() - 0.5) * 1.0 // ±0.5の範囲でノイズ
-				return Math.max(-5, Math.min(5, offset + noise))
-			})
-
-			const pattern = createTilingPattern(variation, {
-				id: `variation_${i}`,
-				name: `Variation ${i + 1}`,
-				duration: 1,
-			})
-
-			// 簡単な類似度計算（ユークリッド距離の逆数）
-			const distance = Math.sqrt(
-				baseOffsets.reduce((sum, val, idx) => sum + Math.pow(val - variation[idx], 2), 0)
-			)
-			const similarity = 1 / (1 + distance)
-
-			newVariations.push({
+		console.log('🎯 Starting optimized variation generation...')
+		console.log('Base offsets:', baseOffsets.map(x => x.toFixed(2)).join(', '))
+		
+		// 最適化された方式：高品質なバリエーション生成
+		const startTime = performance.now()
+		const directionalVariations = generateDirectionalVariations(baseOffsets, 0.1, 100)
+		const endTime = performance.now()
+		
+		console.log(`⚡ Generation completed in ${(endTime - startTime).toFixed(1)}ms`)
+		console.log(`📊 Generated ${directionalVariations.length} high-quality variations`)
+		
+		// 統計情報の計算
+		const stats = {
+			totalGenerated: directionalVariations.length,
+			withChanges: directionalVariations.filter(v => v.meta.foundChange).length,
+			avgChangeAmount: 0,
+			minRhombusCount: Infinity,
+			maxRhombusCount: -Infinity,
+			avgRhombusCount: 0,
+			rhombusCountVariation: 0
+		}
+		
+		if (directionalVariations.length > 0) {
+			const changes = directionalVariations.map(v => Math.abs(v.meta.changeAmount as number))
+			const rhombusCounts = directionalVariations.map(v => v.meta.rhombusCount as number)
+			
+			stats.avgChangeAmount = changes.reduce((a, b) => a + b, 0) / changes.length
+			stats.minRhombusCount = Math.min(...rhombusCounts)
+			stats.maxRhombusCount = Math.max(...rhombusCounts)
+			stats.avgRhombusCount = rhombusCounts.reduce((a, b) => a + b, 0) / rhombusCounts.length
+			stats.rhombusCountVariation = stats.maxRhombusCount - stats.minRhombusCount
+		}
+		
+		console.log('📈 Variation Statistics:')
+		console.log(`   - Patterns with changes: ${stats.withChanges}/${stats.totalGenerated}`)
+		console.log(`   - Average change amount: ${stats.avgChangeAmount.toFixed(3)}`)
+		console.log(`   - Rhombus count range: ${stats.minRhombusCount}-${stats.maxRhombusCount} (avg: ${stats.avgRhombusCount.toFixed(1)})`)
+		console.log(`   - Pattern complexity variation: ${stats.rhombusCountVariation}`)
+		
+		// PatternVariationに変換（変化があるもののみ）
+		console.log('🔍 Filtering variations...')
+		const allVariations = directionalVariations.map((pattern) => {
+			const lineIndex = pattern.meta.lineIndex as number
+			const direction = pattern.meta.direction as number
+			const changeAmount = pattern.meta.changeAmount as number
+			const rhombusCountDiff = pattern.meta.rhombusCountDiff as number
+			const foundChange = pattern.meta.foundChange as boolean
+			
+			console.log(`  - L${lineIndex + 1}${direction > 0 ? '+' : ''}${changeAmount.toFixed(2)}: change=${foundChange}`)
+			
+			// 類似度を変化量と複雑度の組み合わせで計算
+			const similarity = Math.min(1.0, Math.abs(changeAmount) / 2.0 + Math.abs(rhombusCountDiff) / 20.0)
+			
+			return {
 				...pattern,
 				similarity,
-			})
-		}
-
-		// 類似度順にソート
-		newVariations.sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
-
+				name: `L${lineIndex + 1}${direction > 0 ? '+' : ''}${changeAmount.toFixed(2)}`,
+			}
+		})
+		
+		const newVariations: PatternVariation[] = allVariations
+			.filter(pattern => pattern.meta.foundChange) // 変化があるもののみ
+		
+		console.log(`📋 Before filtering: ${allVariations.length} variations`)
+		console.log(`📋 After filtering: ${newVariations.length} variations with changes`)
+		
+		// 変化量でソートし、最も興味深いバリエーションを上位に
+		newVariations.sort((a, b) => {
+			const changeA = Math.abs(a.meta.changeAmount as number)
+			const changeB = Math.abs(b.meta.changeAmount as number)
+			const complexityA = Math.abs(a.meta.rhombusCountDiff as number)
+			const complexityB = Math.abs(b.meta.rhombusCountDiff as number)
+			
+			// 変化量と複雑度の重み付け合計でソート
+			const scoreA = changeA * 0.7 + complexityA * 0.3
+			const scoreB = changeB * 0.7 + complexityB * 0.3
+			
+			return scoreB - scoreA
+		})
+		
+		console.log(`✨ Final variations: ${newVariations.length} high-quality patterns ready`)
+		
 		variations.value = newVariations
+	}
+	
+	// 現在のパターンをキャプチャして新しいTilingPatternを作成
+	function captureCurrentPattern(): TilingPattern {
+		return createTilingPattern([...currentOffsets.value], {
+			id: `captured_${Date.now()}`,
+			name: `Pattern ${Date.now()}`,
+			duration: 1,
+		})
+	}
+
+	// ログ機能の制御
+	function startLogging() {
+		isLogging.value = true
+		loggedFrames.value = []
+		lastLoggedTiling.value = null
+		// 現在のパターンを最初のフレームとして記録
+		const currentTiling = generateRhombusTiling(currentOffsets.value)
+		lastLoggedTiling.value = currentTiling
+		loggedFrames.value.push(captureCurrentPattern())
+	}
+	
+	function stopLogging() {
+		isLogging.value = false
+	}
+	
+	function getLoggedFrames(): TilingPattern[] {
+		return [...loggedFrames.value]
+	}
+	
+	function clearLog() {
+		loggedFrames.value = []
+		lastLoggedTiling.value = null
+	}
+	
+	// オフセット変更時のログ処理
+	function checkAndLogPatternChange() {
+		if (!isLogging.value) return
+		
+		const currentTiling = generateRhombusTiling(currentOffsets.value)
+		
+		if (lastLoggedTiling.value && hasAdjacencyChanged(lastLoggedTiling.value, currentTiling)) {
+			// パターンが変化した場合、新しいフレームを記録
+			loggedFrames.value.push(captureCurrentPattern())
+			lastLoggedTiling.value = currentTiling
+		}
 	}
 
 	// ランダムパターン生成
@@ -197,6 +300,7 @@ export const usePatternStore = defineStore('pattern', () => {
 	// オフセットが変更されたら自動的にバリエーションを再生成
 	watch(currentOffsets, () => {
 		generateVariations()
+		checkAndLogPatternChange() // 変更検知とログ処理を追加
 	}, {deep: true})
 
 	// 初期化
@@ -217,14 +321,14 @@ export const usePatternStore = defineStore('pattern', () => {
 		getCurrentOffsets,
 		applyPreset,
 		saveAsPreset,
+		captureCurrentPattern,
 		
-		// 現在のパターンをキャプチャして新しいTilingPatternを作成
-		captureCurrentPattern(): TilingPattern {
-			return createTilingPattern([...currentOffsets.value], {
-				id: `captured_${Date.now()}`,
-				name: `Pattern ${Date.now()}`,
-				duration: 1,
-			})
-		},
+		// ログ機能
+		isLogging,
+		startLogging,
+		stopLogging,
+		getLoggedFrames,
+		clearLog,
+		loggedFrames,
 	}
 })

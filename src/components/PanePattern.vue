@@ -110,7 +110,7 @@ const intersectionPoints = computed(() => {
 })
 
 function onPatternClick(patternData: any) {
-	appState.insertPatterns([patternData])
+	appState.insertPatternsWithAutoSelect([patternData])
 }
 
 function onPatternHover(patternData: any) {
@@ -124,6 +124,29 @@ function onPatternLeave() {
 function generateRandom() {
 	const randomPattern = pattern.generateRandomPattern()
 	pattern.currentOffsets = randomPattern.offsets
+}
+
+function exportLoggedFrames() {
+	const loggedFrames = pattern.getLoggedFrames()
+	if (loggedFrames.length > 0) {
+		appState.insertPatternsWithAutoSelect(loggedFrames)
+		pattern.clearLog()
+	}
+}
+
+// バリエーション統計情報を計算する関数群
+function getAverageChange(): number {
+	if (pattern.variations.length === 0) return 0
+	const changes = pattern.variations.map(v => Math.abs(v.meta?.changeAmount as number || 0))
+	return changes.reduce((a, b) => a + b, 0) / changes.length
+}
+
+function getRhombusRange(): string {
+	if (pattern.variations.length === 0) return '0'
+	const counts = pattern.variations.map(v => v.meta?.rhombusCount as number || 0)
+	const min = Math.min(...counts)
+	const max = Math.max(...counts)
+	return min === max ? `${min}` : `${min}-${max}`
 }
 </script>
 
@@ -238,27 +261,40 @@ function generateRandom() {
 		<!-- バリエーション表示 -->
 		<div class="variations-section">
 			<div class="section-header">
-				<h3>Variations</h3>
+				<h3>Variations ({{ pattern.variations.length }})</h3>
 				<Tq.InputButton
 					icon="mdi:refresh"
 					@click="pattern.generateVariations()"
-					title="Regenerate Variations"
+					title="Generate Optimized Directional Variations"
 				/>
+			</div>
+			<div class="variations-description">
+				<p>
+					Patterns with significant changes: {{ pattern.variations.length }} variations found.
+				</p>
+				<div class="variation-stats" v-if="pattern.variations.length > 0">
+					<span class="stat-item">
+						Avg change: {{ getAverageChange().toFixed(3) }}
+					</span>
+					<span class="stat-item">
+						Range: {{ getRhombusRange() }}
+					</span>
+				</div>
 			</div>
 			<div class="variations-grid">
 				<PatternThumb
 					v-for="variation in pattern.variations"
 					:key="variation.id"
 					:pattern="variation"
-					:size="80"
+					:size="60"
 					class="variation-thumb"
 					@click="onPatternClick(variation)"
 					@mouseenter="onPatternHover(variation)"
 					@mouseleave="onPatternLeave"
 				>
 					<template #overlay>
-						<div class="similarity-badge" v-if="variation.similarity">
-							{{ Math.round(variation.similarity * 100) }}%
+						<div class="variation-label" v-if="variation.name">
+							{{ variation.name }}
 						</div>
 					</template>
 				</PatternThumb>
@@ -278,6 +314,52 @@ function generateRandom() {
 					@click="pattern.applyPreset(preset.name)"
 					class="preset-button"
 				/>
+			</div>
+		</div>
+
+		<!-- ログ機能（録画）セクション -->
+		<div class="controls-section">
+			<div class="section-header">
+				<h3>Pattern Logging</h3>
+				<div class="log-status">
+					<span v-if="pattern.isLogging" class="recording-indicator">● REC</span>
+					<span v-else class="recording-indicator inactive">● STOP</span>
+				</div>
+			</div>
+			
+			<div class="log-controls">
+				<Tq.InputButton
+					v-if="!pattern.isLogging"
+					@click="pattern.startLogging()"
+					icon="mdi:record"
+					label="Start Recording"
+					title="Start recording pattern changes while moving sliders"
+				/>
+				<Tq.InputButton
+					v-else
+					@click="pattern.stopLogging()"
+					icon="mdi:stop"
+					label="Stop Recording"
+					title="Stop recording"
+				/>
+				<Tq.InputButton
+					@click="pattern.clearLog()"
+					icon="mdi:delete"
+					label="Clear"
+					title="Clear logged frames"
+					:disabled="pattern.loggedFrames.length === 0"
+				/>
+				<Tq.InputButton
+					@click="exportLoggedFrames"
+					icon="mdi:export"
+					label="Export to Sequence"
+					title="Export logged frames as a new sequence"
+					:disabled="pattern.loggedFrames.length === 0"
+				/>
+			</div>
+			
+			<div class="log-info" v-if="pattern.loggedFrames.length > 0">
+				<span>Recorded frames: {{ pattern.loggedFrames.length }}</span>
 			</div>
 		</div>
 	</div>
@@ -347,28 +429,53 @@ function generateRandom() {
 	background white
 
 .variations-section
+	.variations-description
+		font-size 0.8em
+		color var(--tq-color-text-mute)
+		margin-bottom 0.5em
+		font-style italic
+		
 	.variations-grid
 		display grid
-		grid-template-columns repeat(auto-fill, minmax(80px, 1fr))
-		gap 0.5em
+		grid-template-columns repeat(auto-fill, minmax(60px, 1fr))
+		gap 0.3em
+		max-height 400px
+		overflow-y auto
 		
 	.variation-thumb
 		position relative
 		cursor pointer
-		
+			
 		&:hover
 			outline 2px solid var(--tq-color-accent-soft)
-			
-.similarity-badge
-	position absolute
-	top 2px
-	right 2px
-	background var(--tq-color-accent)
-	color white
-	font-size 0.7em
-	padding 0.1em 0.3em
-	border-radius 0.2em
-	font-weight 600
+			transform translateY(-1px)
+			transition all 0.2s ease
+	
+	.variation-label
+		position absolute
+		top 2px
+		left 2px
+		background rgba(0, 0, 0, 0.7)
+		color white
+		font-size 0.6em
+		padding 0.1em 0.3em
+		border-radius 0.2em
+		font-weight 600
+		max-width 90%
+		overflow hidden
+
+	.variation-stats
+		display flex
+		gap 0.8em
+		margin-top 0.3em
+		font-size 0.75em
+		color var(--tq-color-text-mute)
+		
+		.stat-item
+			background var(--tq-color-bg-soft)
+			padding 0.2em 0.4em
+			border-radius 0.3em
+			font-weight 500
 
 .presets-section
 	.presets-list
@@ -379,4 +486,25 @@ function generateRandom() {
 	.preset-button
 		flex 0 0 auto
 		font-size 0.8em
+
+.log-status
+	display flex
+	align-items center
+	gap 0.5em
+	
+	.recording-indicator
+		font-size 0.9em
+		color var(--tq-color-accent)
+		
+		&.inactive
+			color var(--tq-color-text-mute)
+
+.log-controls
+	display flex
+	gap 0.5em
+
+.log-info
+	font-size 0.8em
+	color var(--tq-color-text-mute)
+	margin-top 0.5em
 </style>

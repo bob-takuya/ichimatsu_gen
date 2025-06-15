@@ -31,7 +31,7 @@
     </div>
     
     <div v-if="expanded" class="sequence-patterns">
-      <div class="patterns-timeline">
+      <div ref="timelineRef" class="patterns-timeline">
         <template v-for="(pattern, index) in sequence.patterns" :key="index">
           <!-- フレーム間の挿入スロット -->
           <div
@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted, onMounted } from 'vue';
 import { useTweeq } from 'tweeq';
 import { useAppStateStore } from '../store/appState';
 import { usePatternStore } from '../store/pattern';
@@ -114,6 +114,7 @@ const project = useProjectStore();
 
 const expanded = ref(true);
 const focusedFrame = ref<number | null>(null);
+const timelineRef = ref<HTMLElement | null>(null);
 
 const currentFrame = computed({
   get: () => {
@@ -172,13 +173,62 @@ function onFrameLeave() {
 
 function insertFrameAt(index: number) {
   const newPattern = pattern.captureCurrentPattern();
-  project.insertPatternToSequence(props.sequence.id, index, newPattern);
-  currentFrame.value = index;
+  const result = project.insertPatternToSequence(props.sequence.id, index, newPattern);
+  
+  if (result) {
+    // Auto-select the newly inserted frame
+    appState.selectFrameAndTriggerVariations(result.sequenceId, result.frameIndex);
+    scrollToFrame(result.frameIndex);
+  }
 }
 
 function addPattern() {
   const newPattern = pattern.captureCurrentPattern();
-  project.addPatternToSequence(props.sequence.id, newPattern);
+  const result = project.addPatternToSequence(props.sequence.id, newPattern);
+  
+  if (result) {
+    // Auto-select the newly added frame  
+    appState.selectFrameAndTriggerVariations(result.sequenceId, result.frameIndex);
+    scrollToFrame(result.frameIndex);
+  }
+}
+
+// Auto-scroll functionality
+function scrollToFrame(frameIndex: number) {
+  if (!timelineRef.value) return;
+  
+  const frameElements = timelineRef.value.querySelectorAll('.pattern-frame');
+  if (frameElements[frameIndex]) {
+    const frameElement = frameElements[frameIndex] as HTMLElement;
+    const timeline = timelineRef.value;
+    
+    // Calculate scroll position to center the frame
+    const frameRect = frameElement.getBoundingClientRect();
+    const timelineRect = timeline.getBoundingClientRect();
+    
+    const frameLeft = frameElement.offsetLeft;
+    const frameWidth = frameElement.offsetWidth;
+    const timelineWidth = timeline.clientWidth;
+    
+    // Center the frame in the timeline
+    const targetScrollLeft = frameLeft - (timelineWidth / 2) + (frameWidth / 2);
+    
+    // Smooth scroll to the target position
+    timeline.scrollTo({
+      left: Math.max(0, targetScrollLeft),
+      behavior: 'smooth'
+    });
+  }
+}
+
+// Register auto-scroll callback when component mounts
+let unregisterAutoScroll: (() => void) | null = null;
+
+function handleAutoScroll(frameIndex: number) {
+  // Only scroll if this sequence is selected
+  if (appState.selectedSequenceId === props.sequence.id) {
+    scrollToFrame(frameIndex);
+  }
 }
 
 function removeFrame(index: number) {
@@ -189,9 +239,16 @@ function removeFrame(index: number) {
   }
 }
 
+onMounted(() => {
+  unregisterAutoScroll = appState.registerAutoScrollCallback(handleAutoScroll);
+});
+
 onUnmounted(() => {
   if (appState.selectedSequenceId === props.sequence.id) {
     appState.setIsPlaying(false);
+  }
+  if (unregisterAutoScroll) {
+    unregisterAutoScroll();
   }
 });
 </script>
@@ -291,6 +348,7 @@ onUnmounted(() => {
   padding: 8px 4px 12px 4px;
   background: var(--tq-color-surface);
   border-radius: 8px;
+  scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: var(--tq-color-border) transparent;
 }
