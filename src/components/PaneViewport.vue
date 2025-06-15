@@ -1,29 +1,51 @@
 <script setup lang="ts">
-import {mat2d, vec2} from 'linearly'
+import {vec2} from 'linearly'
 import * as Tq from 'tweeq'
-import {computed, shallowRef} from 'vue'
+import {computed, shallowRef, ref, onMounted, onUnmounted} from 'vue'
 
-import {useViewportStore} from '@/store/viewport'
 import {useAppStateStore} from '@/store/appState'
 import {usePatternStore} from '@/store/pattern'
 import {useRenderingStore} from '@/store/rendering'
 import {generateRhombusTiling, tilingToRenderPaths} from '@/TilingGenerator'
 
-const viewport = useViewportStore()
 const appState = useAppStateStore()
 const pattern = usePatternStore()
 const rendering = useRenderingStore()
 
 const paneSize = shallowRef<vec2>([0, 0])
+const viewportContainer = ref<HTMLElement>()
+
+// Viewport size detection using ResizeObserver
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+	if (!viewportContainer.value) return
+	
+	// Initial size
+	const rect = viewportContainer.value.getBoundingClientRect()
+	paneSize.value = [rect.width, rect.height]
+	
+	// Set up ResizeObserver for dynamic size updates
+	resizeObserver = new ResizeObserver((entries) => {
+		for (const entry of entries) {
+			const { width, height } = entry.contentRect
+			paneSize.value = [width, height]
+		}
+	})
+	
+	resizeObserver.observe(viewportContainer.value)
+})
+
+onUnmounted(() => {
+	if (resizeObserver) {
+		resizeObserver.disconnect()
+		resizeObserver = null
+	}
+})
 
 // Viewport dimensions
 const viewportWidth = computed(() => paneSize.value[0] || 800)
 const viewportHeight = computed(() => paneSize.value[1] || 600)
-
-const transform = computed<mat2d>(() => {
-	// パターンの位置は完全にSVG側で制御するため、PaneZUIの変換は単位行列に
-	return [1, 0, 0, 1, 0, 0] as mat2d
-})
 
 // 現在のパターンのパスデータ生成
 const currentPatternPaths = computed(() => {
@@ -76,10 +98,10 @@ const toggleDebug = () => {
 
 <template>
 	<div class="PaneViewport">
-		<Tq.PaneZUI
-			:transform="transform"
-			@update:transform="viewport.transform = $event"
-			v-model:size="paneSize"
+		<!-- Fixed viewport container without ZUI interactions -->
+		<div 
+			class="viewport-container"
+			ref="viewportContainer"
 		>
 			<!-- Info toggle button -->
 			<div class="debug-toggle" @click="toggleDebug">
@@ -169,7 +191,7 @@ const toggleDebug = () => {
 					</g>
 				</g>
 			</svg>
-		</Tq.PaneZUI>
+		</div>
 	</div>
 </template>
 
@@ -178,6 +200,12 @@ const toggleDebug = () => {
 	height 100%
 	background #f5f5f5
 	position relative
+
+.viewport-container
+	width 100%
+	height 100%
+	position relative
+	overflow hidden
 
 .debug-toggle
 	position absolute
