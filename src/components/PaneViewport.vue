@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {mat2d, vec2} from 'linearly'
-import {Rect} from 'geome'
 import * as Tq from 'tweeq'
 import {computed, shallowRef} from 'vue'
 
@@ -82,6 +81,17 @@ const toggleDebug = () => {
 			@update:transform="viewport.transform = $event"
 			v-model:size="paneSize"
 		>
+			<!-- Info toggle button -->
+			<div class="debug-toggle" @click="toggleDebug">
+				<Tq.InputButton 
+					:icon="appState.debugMode ? 'mdi:information' : 'mdi:information-outline'"
+					:label="appState.debugMode ? 'Info On' : 'Info Off'"
+					:title="appState.debugMode ? 'Hide info panel' : 'Show info panel'"
+					size="small"
+					subtle
+				/>
+			</div>
+			
 			<div class="viewport-debug" v-if="appState.debugMode" @click="toggleDebug">
 				<div>Selected Sequence: {{ appState.selectedSequenceId }}</div>
 				<div>Current Frame: {{ appState.currentFrame }}</div>
@@ -167,6 +177,13 @@ const toggleDebug = () => {
 .PaneViewport
 	height 100%
 	background #f5f5f5
+	position relative
+
+.debug-toggle
+	position absolute
+	top 10px
+	right 10px
+	z-index 20
 
 .viewport-svg
 	width 100%

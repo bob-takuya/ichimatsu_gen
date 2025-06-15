@@ -18,11 +18,11 @@ export interface PatternVariation extends TilingPattern {
 export const usePatternStore = defineStore('pattern', () => {
 	// 現在の12個のオフセット値
 	const currentOffsets = ref<number[]>([
-		-2.0, 2.0, -2.8, 2.8, -3.0, 3.0, -2.8, 2.8, -2.0, 2.0, -1.0, 1.0
+		-5.0, 5.0, -5.0, 5.0, -5.0, 5.0, -5.0, 5.0, -5.0, 5.0, -5.0, 5.0
 	])
 
 	// スライダーの範囲
-	const offsetRange = ref<[number, number]>([-5.0, 5.0])
+	const offsetRange = ref<[number, number]>([-10.0, 10.0])
 
 	// 現在のパターン
 	const currentPattern = computed<TilingPattern>(() => {
@@ -40,7 +40,7 @@ export const usePatternStore = defineStore('pattern', () => {
 	const presets = ref<Array<{name: string; offsets: number[]}>>([
 		{
 			name: 'Symmetric',
-			offsets: [-2.0, 2.0, -2.8, 2.8, -3.0, 3.0, -2.8, 2.8, -2.0, 2.0, -1.0, 1.0]
+			offsets: [-5.0, 5.0, -5.0, 5.0, -5.0, 5.0, -5.0, 5.0, -5.0, 5.0, -5.0, 5.0]
 		},
 		{
 			name: 'Random Seed 1',
@@ -56,7 +56,7 @@ export const usePatternStore = defineStore('pattern', () => {
 		},
 		{
 			name: 'Extreme',
-			offsets: [-4.5, 4.2, -3.8, 4.1, -4.3, 3.9, -4.0, 4.4, -3.7, 4.3, -3.5, 3.6]
+			offsets: [-9.5, 9.2, -8.8, 9.1, -9.3, 8.9, -9.0, 9.4, -8.7, 9.3, -8.5, 8.6]
 		},
 	])
 

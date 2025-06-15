@@ -19,12 +19,21 @@
 ### ✅ User Interface Components
 
 - **App.vue** - Main layout with Tweeq integration
-- **PaneViewport.vue** - SVG rendering with viewport controls
+- **PaneViewport.vue** - SVG rendering with viewport controls and info toggle
 - **PanePattern.vue** - 12 sliders for zone offsets + pattern variations
 - **PaneItems.vue** - Timeline/sequence management panel
-- **ItemTilingSequence.vue** - Individual sequence controls
-- **TitleBar.vue** - Playback and global controls
+- **ItemTilingSequence.vue** - Individual sequence controls with enhanced animation
+- **TitleBar.vue** - Streamlined playback controls (removed unnecessary components)
 - **PatternThumb.vue** - Pattern thumbnail generation
+
+### ✅ UI/UX Improvements (Latest)
+
+- **Removed left icon popup** - Icon remains visible but click functionality disabled
+- **Removed onion skin controls** - Simplified title bar by removing 3 unnecessary buttons
+- **Enhanced animation frame display** - Improved visual feedback for playing frames
+- **Professional timeline UI** - Animation software-like interface with better scrolling
+- **Improved animation synchronization** - Robust frame display with proper cleanup
+- **Better hover effects** - Enhanced visual feedback throughout the interface
 
 ### ✅ Store Architecture
 

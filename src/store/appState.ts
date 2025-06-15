@@ -41,7 +41,7 @@ export const useAppStateStore = defineStore('appState', () => {
 	const itemInsertPosition = ref<vec2>(vec2.zero)
 	
 	// Debug mode
-	const debugMode = ref(true) // Enable debug mode by default for testing
+	const debugMode = ref(false) // Disable debug mode by default
 	
 	// Animation state for external components
 	const isPlaying = ref(false)
@@ -76,8 +76,53 @@ export const useAppStateStore = defineStore('appState', () => {
 
 	// const hoveredPatterns = ref<TilingPattern[]>([])
 
+	// Animation state for better control
+	let animationTimeoutId: number | null = null
+
+	// Sequence and frame selection functions
+	function selectSequence(sequenceId: string) {
+		const sequenceIndex = project.items.findIndex(item => item.id === sequenceId)
+		if (sequenceIndex !== -1) {
+			selections.value = [
+				{
+					type: 'item',
+					index: sequenceIndex,
+					gap: false,
+				},
+			]
+		}
+	}
+
+	function setCurrentFrame(frameIndex: number) {
+		const selection = selections.value[0]
+		if (selection && (selection.type === 'item' || selection.type === 'sequencePattern')) {
+			selections.value = [
+				{
+					type: 'sequencePattern',
+					index: selection.index,
+					patternIndex: frameIndex,
+					gap: false,
+				},
+			]
+		}
+	}
+	let currentSequenceId: string | null = null
+	let currentFrameIndex: number = 0
+
+	// Reactive animation frame
+	const currentAnimationFrame = ref(0)
+
 	// 再生制御
 	whenever(isPlaying, () => {
+		// アニメーション停止時にタイマーをクリア
+		if (!isPlaying.value) {
+			if (animationTimeoutId !== null) {
+				clearTimeout(animationTimeoutId)
+				animationTimeoutId = null
+			}
+			return
+		}
+
 		if (selections.value.length === 0) {
 			isPlaying.value = false
 			return
@@ -110,7 +155,10 @@ export const useAppStateStore = defineStore('appState', () => {
 		}
 
 		function update() {
-			if (!isPlaying.value) return
+			if (!isPlaying.value) {
+				animationTimeoutId = null
+				return
+			}
 
 			patternIndex = (patternIndex + 1) % patterns.length
 
@@ -121,7 +169,7 @@ export const useAppStateStore = defineStore('appState', () => {
 				pattern.updateCurrentOffsets(currentPatternData.offsets)
 			}
 
-			// 選択状態を更新
+			// 選択状態を更新してUIを同期
 			selections.value = [
 				{
 					type: 'sequencePattern',
@@ -131,13 +179,14 @@ export const useAppStateStore = defineStore('appState', () => {
 				},
 			]
 
-			setTimeout(
-				update,
-				(1000 / project.frameRate) * patterns[patternIndex].duration
-			)
+			// 次のフレームの更新をスケジュール
+			const frameDelay = (1000 / project.frameRate) * patterns[patternIndex].duration
+			animationTimeoutId = setTimeout(update, frameDelay) as any
 		}
 
-		setTimeout(update, (1000 / project.frameRate) * patterns[patternIndex].duration)
+		// 最初のフレームの更新をスケジュール
+		const initialDelay = (1000 / project.frameRate) * patterns[patternIndex].duration
+		animationTimeoutId = setTimeout(update, initialDelay) as any
 	})
 
 	function offsetSelection(offset: number) {
@@ -503,7 +552,7 @@ export const useAppStateStore = defineStore('appState', () => {
 		// Computed properties for sequence management
 		get selectedSequenceId() {
 			const sel = selections.value[0]
-			if (sel?.type === 'item') {
+			if (sel?.type === 'item' || sel?.type === 'sequencePattern') {
 				return project.items[sel.index]?.id || null
 			}
 			return null

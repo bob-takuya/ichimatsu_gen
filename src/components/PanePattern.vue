@@ -121,18 +121,9 @@ function onPatternLeave() {
 	appState.hoveredPatterns = []
 }
 
-function resetToSymmetric() {
-	pattern.applyPreset('Symmetric')
-}
-
 function generateRandom() {
 	const randomPattern = pattern.generateRandomPattern()
 	pattern.currentOffsets = randomPattern.offsets
-}
-
-function generateSymmetric() {
-	const symmetricPattern = pattern.generateSymmetricPattern()
-	pattern.currentOffsets = symmetricPattern.offsets
 }
 </script>
 
@@ -165,19 +156,9 @@ function generateSymmetric() {
 				<h3>Zone Offsets</h3>
 				<div class="preset-buttons">
 					<Tq.InputButton
-						icon="mdi:refresh"
-						@click="resetToSymmetric"
-						title="Reset to Symmetric"
-					/>
-					<Tq.InputButton
 						icon="mdi:dice-6"
 						@click="generateRandom"
 						title="Generate Random"
-					/>
-					<Tq.InputButton
-						icon="mdi:symmetry-horizontal"
-						@click="generateSymmetric"
-						title="Generate Symmetric"
 					/>
 				</div>
 			</div>

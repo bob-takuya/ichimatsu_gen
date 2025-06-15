@@ -1,12 +1,6 @@
 <script setup lang="ts">
-import {computed, useTemplateRef} from 'vue'
-import {ref} from 'vue'
-
 import {ColorIcon} from '../ColorIcon'
-import {Menu, type MenuItem} from '../Menu'
-import {type Action, useActionsStore} from '../stores/actions'
 import type {TitleBarProps} from './types'
-import {Popover} from '../Popover'
 
 defineProps<TitleBarProps>()
 
@@ -15,48 +9,15 @@ defineSlots<{
 	center(): any
 	right(): any
 }>()
-
-const actions = useActionsStore()
-
-const appIcon = useTemplateRef<any>('appIcon')
-const appMenu = useTemplateRef<any>('appMenu')
-
-const isMenuShown = ref(false)
-
-function convertToMenuItem(action: Action): MenuItem {
-	if ('perform' in action) {
-		return {
-			...action,
-			bindIcon: action.bind?.icon,
-		}
-	} else {
-		return {
-			...action,
-			children: action.children.map(convertToMenuItem),
-		}
-	}
-}
-
-const menus = computed(() => (actions.menu as Action[]).map(convertToMenuItem))
 </script>
 
 <template>
 	<div class="TqTitleBar">
 		<div class="left">
 			<ColorIcon
-				ref="appIcon"
 				class="app-icon"
 				:src="icon"
-				:class="{shown: isMenuShown}"
-				@click="isMenuShown = !isMenuShown"
 			/>
-			<Popover
-				:reference="appIcon"
-				placement="bottom-start"
-				v-model:open="isMenuShown"
-			>
-				<Menu v-if="isMenuShown" ref="appMenu" :items="menus" />
-			</Popover>
 			<span class="app-name">{{ name }}</span>
 			<slot name="left" />
 		</div>
@@ -111,9 +72,6 @@ const menus = computed(() => (actions.menu as Action[]).map(convertToMenuItem))
 
 .app-icon
 	height var(--tq-input-height)
-
-	&.shown
-		color var(--tq-color-accent)
 
 .app-name
 	font-family 500
